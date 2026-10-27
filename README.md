@@ -14,7 +14,9 @@ Een klembordbeheerder voor Windows 11. Alles wat je knipt of kopieert komt in ee
 
 ## Installeren
 
-Er is niets extra's nodig: Windows 11 heeft de benodigde .NET Framework 4 compiler al aan boord.
+**Makkelijkst:** download `KlembordTool.exe` bij de [laatste release](https://github.com/dirkplat1999/klembord-tool-/releases/latest) en start het. Waarschuwt Windows SmartScreen, kies dan *Meer informatie › Toch uitvoeren* (het programma is niet ondertekend).
+
+**Zelf bouwen:** er is niets extra's nodig, want Windows 11 heeft de benodigde .NET Framework 4 compiler al aan boord.
 
 1. Download of clone deze repository.
 2. Dubbelklik op `build.bat`. Er verschijnt `KlembordTool.exe`.
