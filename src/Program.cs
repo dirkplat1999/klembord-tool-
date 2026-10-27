@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -12,9 +13,17 @@ namespace KlembordTool
         [STAThread]
         static void Main(string[] args)
         {
+            Func<string, bool> hasArg = name => args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
+            bool justUpdated = hasArg("/updated");
             bool created;
             using (var mutex = new Mutex(true, "KlembordTool_SingleInstance_v1" + (Environment.GetEnvironmentVariable("KLEMBORDTOOL_DATA") ?? "").Replace('\\', '_').Replace(':', '_'), out created))
             {
+                if (!created && justUpdated)
+                {
+                    // Started by the updater: wait for the old version to finish closing.
+                    try { created = mutex.WaitOne(15000); }
+                    catch (AbandonedMutexException) { created = true; }
+                }
                 if (!created)
                 {
                     // Already running: ask the existing instance to show its window.
@@ -23,12 +32,14 @@ namespace KlembordTool
                     return;
                 }
 
+                // GitHub requires TLS 1.2, which .NET 4 does not enable by default.
+                ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
+                Updater.CleanUp();
                 Native.SetProcessDPIAware();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.ThreadException += (s, e) => ReportError(e.Exception);
-                bool startHidden = args.Any(a => a.Equals("/tray", StringComparison.OrdinalIgnoreCase));
-                Application.Run(new MainForm(startHidden));
+                Application.Run(new MainForm(hasArg("/tray"), justUpdated));
                 GC.KeepAlive(mutex);
             }
         }

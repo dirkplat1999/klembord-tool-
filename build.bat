@@ -10,7 +10,7 @@ if not exist "%CSC%" (
     exit /b 1
 )
 "%CSC%" /nologo /target:winexe /optimize+ /codepage:65001 /out:KlembordTool.exe ^
-    /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Xml.dll ^
+    /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Xml.dll /r:System.Web.Extensions.dll ^
     src\*.cs
 if errorlevel 1 (
     echo.

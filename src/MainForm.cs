@@ -37,10 +37,11 @@ namespace KlembordTool
         Button seqStartBtn;
         CheckBox loopCheck;
         ToolStripStatusLabel statusLabel;
-        ToolStripMenuItem miTop, miHide, miSaveHist, miStartup, miTrayStop;
+        ToolStripMenuItem miTop, miHide, miSaveHist, miStartup, miTrayStop, miAutoUpdate, miUpdate, miTrayUpdate;
         readonly Timer saveTimer, advanceTimer, statusTimer;
 
-        bool allowShow, exiting, balloonShown, mainHotkeyFailed;
+        bool allowShow, exiting, balloonShown, mainHotkeyFailed, updating;
+        UpdateInfo pendingUpdate;
         IntPtr lastTarget;
         Native.WinEventDelegate winEventProc;
         IntPtr winEventHook;
@@ -53,7 +54,7 @@ namespace KlembordTool
         readonly HashSet<Clip> failedHotkeys = new HashSet<Clip>();
         readonly List<Label> subLabels = new List<Label>();
 
-        public MainForm(bool startHidden)
+        public MainForm(bool startHidden, bool justUpdated)
         {
             allowShow = !startHidden;
             myPid = (uint)Process.GetCurrentProcess().Id;
@@ -72,6 +73,17 @@ namespace KlembordTool
             ApplyOptions();
             RestoreWindowBounds();
             RefreshAll();
+
+            // Look for updates a little after start-up, at most about once a day.
+            After(8000, () =>
+            {
+                Updater.CleanUp();
+                if (justUpdated)
+                    tray.ShowBalloonTip(4000, "Klembord Tool bijgewerkt",
+                        "Je gebruikt nu versie " + Updater.Text(Updater.Current) + ".", ToolTipIcon.Info);
+                else if (data.AutoUpdateCheck && (DateTime.Now - data.LastUpdateCheck).TotalHours >= 20)
+                    CheckForUpdates(false);
+            });
         }
 
         // ------------------------------------------------------------------ UI
@@ -125,10 +137,24 @@ namespace KlembordTool
             miStartup = new ToolStripMenuItem("Starten met Windows");
             miStartup.Click += delegate { SetStartup(!StartupEnabled()); };
             mOpt.DropDownOpening += delegate { miStartup.Checked = StartupEnabled(); };
-            mOpt.DropDownItems.AddRange(new ToolStripItem[] { miTop, miHide, miSaveHist, mMax, new ToolStripSeparator(), miStartup });
+            miAutoUpdate = new ToolStripMenuItem("Automatisch zoeken naar updates") { CheckOnClick = true };
+            miAutoUpdate.CheckedChanged += delegate { data.AutoUpdateCheck = miAutoUpdate.Checked; ScheduleSave(); };
+            mOpt.DropDownItems.AddRange(new ToolStripItem[] { miTop, miHide, miSaveHist, mMax, new ToolStripSeparator(), miStartup, miAutoUpdate });
 
             var mHelp = new ToolStripMenuItem("&Help");
             mHelp.DropDownItems.Add("Uitleg", null, delegate { ShowHelp(); });
+            miUpdate = new ToolStripMenuItem("Zoeken naar updates…", null, delegate
+            {
+                if (pendingUpdate != null) AskToInstall(pendingUpdate);
+                else CheckForUpdates(true);
+            });
+            mHelp.DropDownItems.Add(miUpdate);
+            mHelp.DropDownItems.Add(new ToolStripSeparator());
+            mHelp.DropDownItems.Add("Over Klembord Tool", null, delegate
+            {
+                MessageBox.Show(this, "Klembord Tool\nVersie " + Updater.Text(Updater.Current) +
+                    "\n\nhttps://github.com/" + Updater.Repo, "Over Klembord Tool", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            });
             menu.Items.AddRange(new ToolStripItem[] { mFile, mOpt, mHelp });
 
             // Status bar
@@ -335,11 +361,17 @@ namespace KlembordTool
             cm.Items.Add("Openen", null, delegate { ShowMain(); });
             miTrayStop = new ToolStripMenuItem("Reeks stoppen", null, delegate { StopSequence(); });
             cm.Items.Add(miTrayStop);
+            miTrayUpdate = new ToolStripMenuItem("Update installeren…", null, delegate { if (pendingUpdate != null) AskToInstall(pendingUpdate); })
+            {
+                Visible = false
+            };
+            cm.Items.Add(miTrayUpdate);
             cm.Items.Add(new ToolStripSeparator());
             cm.Items.Add("Afsluiten", null, delegate { ExitApp(); });
             cm.Opening += delegate { miTrayStop.Enabled = seqActive; };
             tray = new NotifyIcon { Icon = appIcon, Text = "Klembord Tool", Visible = true, ContextMenuStrip = cm };
             tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) ToggleWindow(); };
+            tray.BalloonTipClicked += delegate { if (pendingUpdate != null && !updating) AskToInstall(pendingUpdate); };
         }
 
         void ApplyOptions()
@@ -349,6 +381,7 @@ namespace KlembordTool
             miHide.Checked = data.HideAfterPaste;
             miSaveHist.Checked = data.SaveHistory;
             loopCheck.Checked = data.LoopSequence;
+            miAutoUpdate.Checked = data.AutoUpdateCheck;
         }
 
         void RestoreWindowBounds()
@@ -1127,6 +1160,89 @@ namespace KlembordTool
                 }
             }
             return Native.CallNextHookEx(kbHook, nCode, wParam, lParam);
+        }
+
+        // ------------------------------------------------------------------ Updates
+
+        void CheckForUpdates(bool manual)
+        {
+            if (updating) return;
+            if (manual) ShowStatus("Zoeken naar updates…");
+            Updater.Check((info, error) =>
+            {
+                if (error != null)
+                {
+                    if (manual)
+                        MessageBox.Show(this, "Zoeken naar updates is niet gelukt. Controleer je internetverbinding.\n\n" + error.Message,
+                            "Klembord Tool", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                data.LastUpdateCheck = DateTime.Now;
+                ScheduleSave();
+                if (info.Version <= Updater.Current)
+                {
+                    if (manual)
+                        MessageBox.Show(this, "Je hebt de nieuwste versie (" + Updater.Text(Updater.Current) + ").",
+                            "Klembord Tool", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                pendingUpdate = info;
+                string label = "Update naar versie " + Updater.Text(info.Version) + " installeren…";
+                miUpdate.Text = label;
+                miTrayUpdate.Text = label;
+                miTrayUpdate.Visible = true;
+                if (manual) AskToInstall(info);
+                else
+                    tray.ShowBalloonTip(8000, "Update beschikbaar",
+                        "Versie " + Updater.Text(info.Version) + " van Klembord Tool is beschikbaar. Klik hier om bij te werken.", ToolTipIcon.Info);
+            });
+        }
+
+        void AskToInstall(UpdateInfo info)
+        {
+            if (updating) return;
+            if (info.DownloadUrl == null)
+            {
+                Process.Start(info.PageUrl ?? Updater.ReleasesPage);
+                return;
+            }
+            string notes = (info.Notes ?? "").Replace("**", "").Replace("\r", "").Trim();
+            if (notes.Length > 700) notes = notes.Substring(0, 700) + "…";
+            string question = "Versie " + Updater.Text(info.Version) + " is beschikbaar. Je gebruikt nu versie " +
+                Updater.Text(Updater.Current) + ".\n\n" + (notes.Length > 0 ? notes + "\n\n" : "") +
+                "Nu bijwerken? Klembord Tool start daarna vanzelf opnieuw. Je lijsten blijven bewaard.";
+            if (MessageBox.Show(this, question, "Update beschikbaar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                InstallUpdate(info);
+        }
+
+        void InstallUpdate(UpdateInfo info)
+        {
+            updating = true;
+            statusTimer.Stop();
+            statusLabel.Text = "Update downloaden…";
+            Updater.Download(info.DownloadUrl,
+                percent => { statusLabel.Text = "Update downloaden… " + percent + "%"; },
+                error =>
+                {
+                    if (error == null)
+                    {
+                        try { Updater.Install(); }
+                        catch (Exception ex) { error = ex; }
+                    }
+                    if (error != null)
+                    {
+                        updating = false;
+                        Updater.CleanUp();
+                        statusLabel.Text = Hint;
+                        MessageBox.Show(this, "De update kon niet automatisch worden geïnstalleerd:\n" + error.Message +
+                            "\n\nDe downloadpagina wordt geopend, zodat je de nieuwe versie zelf kunt downloaden.",
+                            "Klembord Tool", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        Process.Start(info.PageUrl ?? Updater.ReleasesPage);
+                        return;
+                    }
+                    Process.Start(Application.ExecutablePath, "/updated" + (Visible ? "" : " /tray"));
+                    ExitApp();
+                });
         }
 
         // ------------------------------------------------------------------ Startup

@@ -80,6 +80,8 @@ namespace KlembordTool
         public bool SaveHistory = true;
         public int MaxHistory = 200;
         public int SettingsVersion = 0;
+        public bool AutoUpdateCheck = true;
+        public DateTime LastUpdateCheck;
         public int WinX = int.MinValue, WinY = int.MinValue, WinW = 0, WinH = 0;
 
         // KLEMBORDTOOL_DATA lets a test copy run with its own data folder.
