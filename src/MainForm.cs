@@ -1206,7 +1206,11 @@ namespace KlembordTool
                 Process.Start(info.PageUrl ?? Updater.ReleasesPage);
                 return;
             }
-            string notes = (info.Notes ?? "").Replace("**", "").Replace("\r", "").Trim();
+            // Release notes are Markdown; anything after a "---" line is meant for the web page only.
+            string notes = (info.Notes ?? "").Replace("\r", "");
+            int cut = notes.IndexOf("\n---");
+            if (cut >= 0) notes = notes.Substring(0, cut);
+            notes = notes.Replace("**", "").Replace("*", "").Replace("`", "").Trim();
             if (notes.Length > 700) notes = notes.Substring(0, 700) + "…";
             string question = "Versie " + Updater.Text(info.Version) + " is beschikbaar. Je gebruikt nu versie " +
                 Updater.Text(Updater.Current) + ".\n\n" + (notes.Length > 0 ? notes + "\n\n" : "") +
