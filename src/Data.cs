@@ -75,32 +75,43 @@ namespace KlembordTool
         public uint MainMods = Native.MOD_CONTROL | Native.MOD_ALT;
         public uint MainKey = (uint)Keys.V;
         public bool AlwaysOnTop = false;
-        public bool HideAfterPaste = true;
+        public bool HideAfterPaste = false;
         public bool LoopSequence = false;
         public bool SaveHistory = true;
         public int MaxHistory = 200;
+        public int SettingsVersion = 0;
         public int WinX = int.MinValue, WinY = int.MinValue, WinW = 0, WinH = 0;
 
-        public static readonly string Folder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KlembordTool");
+        // KLEMBORDTOOL_DATA lets a test copy run with its own data folder.
+        public static readonly string Folder = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KLEMBORDTOOL_DATA"))
+            ? Environment.GetEnvironmentVariable("KLEMBORDTOOL_DATA")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KlembordTool");
 
         static string FilePath { get { return Path.Combine(Folder, "data.xml"); } }
 
         public static AppData Load()
         {
+            AppData d = null;
             try
             {
                 if (File.Exists(FilePath))
                 {
                     using (var s = File.OpenRead(FilePath))
-                        return (AppData)new XmlSerializer(typeof(AppData)).Deserialize(s);
+                        d = (AppData)new XmlSerializer(typeof(AppData)).Deserialize(s);
                 }
             }
             catch (Exception)
             {
                 try { File.Copy(FilePath, Path.Combine(Folder, "data.beschadigd.xml"), true); } catch (Exception) { }
             }
-            return new AppData();
+            if (d == null) d = new AppData();
+            if (d.SettingsVersion < 2)
+            {
+                // Version 1 hid the window after every paste; the window now stays open by default.
+                d.HideAfterPaste = false;
+                d.SettingsVersion = 2;
+            }
+            return d;
         }
 
         public void Save()

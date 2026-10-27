@@ -23,6 +23,7 @@ namespace KlembordTool
             MinimizeBox = false;
             MaximizeBox = false;
             ShowInTaskbar = false;
+            ShowIcon = false;
             BackColor = Theme.Bg;
 
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(10) };
@@ -30,11 +31,11 @@ namespace KlembordTool
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var label = new Label { Text = hint, AutoSize = true, ForeColor = Theme.Sub, Margin = new Padding(0, 0, 0, 6) };
+            var label = new Label { Text = hint, AutoSize = true, MaximumSize = new Size(530, 0), ForeColor = Theme.Sub, Margin = new Padding(0, 0, 0, 6) };
             box = new TextBox
             {
-                Multiline = true, AcceptsReturn = true, AcceptsTab = true, ScrollBars = ScrollBars.Both,
-                WordWrap = false, Dock = DockStyle.Fill, Font = new Font("Consolas", 10.5F),
+                Multiline = true, AcceptsReturn = true, AcceptsTab = true, ScrollBars = ScrollBars.Vertical,
+                WordWrap = true, Dock = DockStyle.Fill, Font = new Font("Consolas", 10.5F),
                 Text = (text ?? "").Replace("\r\n", "\n").Replace("\n", "\r\n")
             };
 

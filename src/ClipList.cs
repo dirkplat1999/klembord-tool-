@@ -106,11 +106,17 @@ namespace KlembordTool
             ItemHeight = Math.Min(255, Font.Height + smallFont.Height + Font.Height / 2 + 4);
         }
 
+        /// <summary>Left offset of item text, so captions above a list can line up with it.</summary>
+        public static int TextInset(Font font)
+        {
+            return font.Height / 2 + 4;
+        }
+
         static string Preview(string text)
         {
             if (text == null) return "";
             string s = text.Length > 400 ? text.Substring(0, 400) : text;
-            s = s.Replace("\r\n", " ⏎ ").Replace('\n', ' ').Replace('\r', ' ').Replace('\t', ' ');
+            s = s.Replace("\r\n", "  ↵  ").Replace('\n', ' ').Replace('\r', ' ').Replace('\t', ' ');
             return s.Trim();
         }
 
@@ -126,11 +132,11 @@ namespace KlembordTool
             Color bg = sel ? Theme.SelBg : (e.Index == hoverIdx ? Theme.HoverBg : BackColor);
             using (var b = new SolidBrush(bg)) g.FillRectangle(b, r);
             if (marked)
-                using (var b = new SolidBrush(Theme.Accent)) g.FillRectangle(b, r.X, r.Y + 3, 4, r.Height - 6);
+                using (var b = new SolidBrush(Theme.Accent)) g.FillRectangle(b, r.X + 2, r.Y + 6, 3, r.Height - 12);
 
-            int pad = Font.Height / 2;
-            int x = r.X + pad + (marked ? 4 : 0);
-            int w = r.Width - (x - r.X) - pad;
+            int pad = TextInset(Font);
+            int x = r.X + pad;
+            int w = r.Width - pad - Font.Height / 2;
             int top = r.Y + (r.Height - Font.Height - smallFont.Height) / 2;
             var flags = TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
 
@@ -141,7 +147,7 @@ namespace KlembordTool
             TextRenderer.DrawText(g, meta, smallFont,
                 new Rectangle(x, top + Font.Height, w, smallFont.Height), metaColor, flags);
 
-            using (var p = new Pen(Theme.Line)) g.DrawLine(p, r.X + pad, r.Bottom - 1, r.Right - pad, r.Bottom - 1);
+            using (var p = new Pen(Theme.Line)) g.DrawLine(p, r.X + pad, r.Bottom - 1, r.Right - Font.Height / 2, r.Bottom - 1);
 
             if (dropIdx == e.Index || (dropIdx == Items.Count && e.Index == Items.Count - 1))
             {

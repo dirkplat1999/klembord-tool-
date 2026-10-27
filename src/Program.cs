@@ -13,7 +13,7 @@ namespace KlembordTool
         static void Main(string[] args)
         {
             bool created;
-            using (var mutex = new Mutex(true, "KlembordTool_SingleInstance_v1", out created))
+            using (var mutex = new Mutex(true, "KlembordTool_SingleInstance_v1" + (Environment.GetEnvironmentVariable("KLEMBORDTOOL_DATA") ?? "").Replace('\\', '_').Replace(':', '_'), out created))
             {
                 if (!created)
                 {
@@ -26,10 +26,24 @@ namespace KlembordTool
                 Native.SetProcessDPIAware();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                Application.ThreadException += (s, e) => ReportError(e.Exception);
                 bool startHidden = args.Any(a => a.Equals("/tray", StringComparison.OrdinalIgnoreCase));
                 Application.Run(new MainForm(startHidden));
                 GC.KeepAlive(mutex);
             }
+        }
+
+        static void ReportError(Exception ex)
+        {
+            try
+            {
+                System.IO.Directory.CreateDirectory(AppData.Folder);
+                System.IO.File.AppendAllText(System.IO.Path.Combine(AppData.Folder, "fouten.log"),
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" + ex + "\r\n\r\n");
+            }
+            catch (Exception) { }
+            MessageBox.Show("Er ging iets mis: " + ex.Message + "\r\n\r\nDetails staan in fouten.log in de gegevensmap.",
+                "Klembord Tool", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 }

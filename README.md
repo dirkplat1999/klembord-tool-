@@ -4,10 +4,11 @@ Een klembordbeheerder voor Windows 11. Alles wat je knipt of kopieert komt in ee
 
 ## Functies
 
-- **Geschiedenis** – alle tekst die je knipt of kopieert (Ctrl+X / Ctrl+C) komt bovenaan de lijst. Klik op een regel en hij wordt direct geplakt in het programma waar je net was. Je kunt zoeken door te typen.
+- **Geschiedenis** – alle tekst die je knipt of kopieert (Ctrl+X of Ctrl+C) komt bovenaan de lijst. Klik op een regel en die wordt meteen geplakt in het programma waar je net was. Het venster blijft open, zodat je daarna nog iets kunt aanklikken. Je kunt zoeken door te typen.
 - **Bewaarlijst** – sleep regels naar de bewaarlijst voor dingen die je vaker nodig hebt. Volgorde aanpassen kan ook door te slepen.
 - **Sneltoetsen** – koppel een toetscombinatie aan een knipsel in de bewaarlijst (rechtermuisknop › *Sneltoets instellen…*, bijv. `Ctrl+Alt+1`). Die combinatie plakt het knipsel in elk programma.
-- **Reekslijst** – zet regels in een vaste volgorde. Klik op een regel: die wordt geplakt en de volgende staat meteen klaar. Elke keer dat je `Ctrl+V` drukt komt de volgende regel. Met *Regels toevoegen…* plak je een hele lijst in één keer (elke regel wordt een item). Optie *Herhalen* begint na de laatste regel weer bij de eerste.
+- **Reekslijst** – zet regels in een vaste volgorde. Klik op een regel: die wordt geplakt en de volgende staat meteen klaar. Elke keer dat je `Ctrl+V` drukt komt de volgende regel. Met *Toevoegen…* zet je een hele lijst er in één keer in (elke regel wordt een item). Met *Herhalen* begint de reeks na de laatste regel weer bij de eerste.
+- Wil je dat het venster na het plakken verdwijnt? Zet dan *Opties › Venster verbergen na plakken* aan.
 - `Ctrl+Alt+V` opent/verbergt het venster (instelbaar via *Bestand*).
 - Draait in het systeemvak; optioneel automatisch starten met Windows.
 - Wachtwoorden die door wachtwoordmanagers als "niet in geschiedenis" zijn gemarkeerd worden overgeslagen.

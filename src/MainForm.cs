@@ -17,7 +17,7 @@ namespace KlembordTool
         const int HK_FAV_BASE = 1000;
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         const string RunName = "KlembordTool";
-        const string Hint = "Klik = plakken in vorig venster  ·  Sleep naar Bewaarlijst of Reeks  ·  Rechtermuisknop = meer opties";
+        const string Hint = "Klik op een regel om te plakken  ·  Sleep regels naar de bewaarlijst of reekslijst  ·  Rechtermuisknop voor meer opties";
 
         static readonly HashSet<string> IgnoredClasses = new HashSet<string>
         {
@@ -51,6 +51,7 @@ namespace KlembordTool
         int seqIndex, suppressUntil;
         readonly Dictionary<int, Clip> hotkeyMap = new Dictionary<int, Clip>();
         readonly HashSet<Clip> failedHotkeys = new HashSet<Clip>();
+        readonly List<Label> subLabels = new List<Label>();
 
         public MainForm(bool startHidden)
         {
@@ -136,10 +137,10 @@ namespace KlembordTool
             status.Items.Add(statusLabel);
 
             // History column
-            histList = new ClipList { BackColor = Theme.Card, Dock = DockStyle.Fill, EmptyText = "Nog niets gekopieerd.\nKnip of kopieer tekst (Ctrl+X / Ctrl+C) en het verschijnt hier." };
+            histList = new ClipList { BackColor = Theme.Card, Dock = DockStyle.Fill, EmptyText = "Nog niets gekopieerd.\nKnip of kopieer tekst (Ctrl+X of Ctrl+C), dan verschijnt die hier." };
             histList.Meta = (c, i) => HistoryMeta(c);
             histList.ItemClicked += c => PasteClip(c);
-            searchBox = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 6) };
+            searchBox = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
             searchBox.HandleCreated += delegate { Native.SendMessage(searchBox.Handle, Native.EM_SETCUEBANNER, (IntPtr)1, "Zoeken…  (Ctrl+F)"); };
             searchBox.TextChanged += delegate { RefreshHistory(); };
             searchBox.KeyDown += SearchKeyDown;
@@ -155,9 +156,9 @@ namespace KlembordTool
             };
             histList.ContextMenuStrip = BuildHistoryMenu();
             var histCol = MakeColumn("Geschiedenis", searchBox, histList,
-                MakeButton("→ Bewaarlijst", delegate { AddTo(favList, Sel(histList)); }),
-                MakeButton("→ Reeks", delegate { AddTo(seqList, Sel(histList)); }),
-                MakeButton("Wissen", delegate { ClearHistory(); }));
+                MakeButton("Bewaren", delegate { AddTo(favList, Sel(histList)); }),
+                MakeButton("Naar reeks", delegate { AddTo(seqList, Sel(histList)); }),
+                MakeButton("Wissen…", delegate { ClearHistory(); }));
 
             // Favorites column
             favList = new ClipList { BackColor = Theme.Card, Dock = DockStyle.Fill, AcceptDrops = true, AllowReorder = true, EmptyText = "Sleep regels uit de geschiedenis hierheen om ze te bewaren." };
@@ -168,35 +169,35 @@ namespace KlembordTool
             favList.KeyDown += (s, e) => ListKeyDown(favList, e);
             favList.DoubleClick += delegate { EditClip(favList, Sel(favList)); };
             favList.ContextMenuStrip = BuildFavoriteMenu();
-            var favHint = new Label { Text = "Vaste knipsels. Koppel een sneltoets om ze overal direct te plakken.", AutoSize = true, ForeColor = Theme.Sub, Margin = new Padding(0, 0, 0, 6) };
+            var favHint = MakeSubLabel("Klik of gebruik een sneltoets om te plakken");
             var favCol = MakeColumn("Bewaarlijst", favHint, favList,
                 MakeButton("Nieuw…", delegate { NewFavorite(); }),
                 MakeButton("Sneltoets…", delegate { SetClipHotkey(Sel(favList)); }),
                 MakeButton("Verwijderen", delegate { RemoveClip(favList, Sel(favList)); }));
 
             // Sequence column
-            seqList = new ClipList { BackColor = Theme.Card, Dock = DockStyle.Fill, AcceptDrops = true, AllowReorder = true, EmptyText = "Sleep regels hierheen of gebruik 'Regels toevoegen…'. Klik een regel om te plakken; elke volgende Ctrl+V plakt de volgende regel." };
-            seqList.Meta = (c, i) => "#" + (i + 1) + (seqActive && i == seqIndex ? "   ▶ volgende bij Ctrl+V" : "");
+            seqList = new ClipList { BackColor = Theme.Card, Dock = DockStyle.Fill, AcceptDrops = true, AllowReorder = true, EmptyText = "Sleep regels hierheen of klik op 'Toevoegen…'.\nKlik daarna op een regel om te plakken. Elke volgende Ctrl+V plakt de volgende regel." };
+            seqList.Meta = (c, i) => "#" + (i + 1) + (seqActive && i == seqIndex ? "  ·  volgende bij Ctrl+V" : "");
             seqList.IsMarked = i => seqActive && i == seqIndex;
             seqList.ItemClicked += c => StartSequence(data.Sequence.IndexOf(c), true);
             seqList.ItemDropped += (d, idx, move) => OnDropped(seqList, d, idx, move);
             seqList.KeyDown += (s, e) => ListKeyDown(seqList, e);
             seqList.DoubleClick += delegate { EditClip(seqList, Sel(seqList)); };
             seqList.ContextMenuStrip = BuildSequenceMenu();
-            seqStatus = new Label { AutoSize = true, ForeColor = Theme.Sub, Margin = new Padding(0, 0, 0, 6) };
-            seqStartBtn = MakeButton("▶ Start reeks", delegate { if (seqActive) StopSequence(); else StartSequence(Math.Max(0, seqList.SelectedIndex), false); });
-            loopCheck = new CheckBox { Text = "Herhalen", AutoSize = true, Margin = new Padding(6, 6, 2, 2) };
+            seqStatus = MakeSubLabel("");
+            seqStartBtn = MakeButton("▶ Start", delegate { if (seqActive) StopSequence(); else StartSequence(Math.Max(0, seqList.SelectedIndex), false); });
+            loopCheck = new CheckBox { Text = "Herhalen", AutoSize = true, Anchor = AnchorStyles.Right, Margin = Padding.Empty };
             loopCheck.CheckedChanged += delegate { data.LoopSequence = loopCheck.Checked; ScheduleSave(); };
-            var seqCol = MakeColumn("Reekslijst", seqStatus, seqList,
+            var seqCol = MakeColumnWithExtra("Reekslijst", seqStatus, seqList,
+                loopCheck,
                 seqStartBtn,
-                MakeButton("Regels toevoegen…", delegate { AddLinesToSequence(); }),
-                MakeButton("Wissen", delegate { ClearSequence(); }),
-                loopCheck);
+                MakeButton("Toevoegen…", delegate { AddLinesToSequence(); }),
+                MakeButton("Wissen…", delegate { ClearSequence(); }));
 
             var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(6) };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 31));
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 31));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
             grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             grid.Controls.Add(histCol, 0, 0);
             grid.Controls.Add(favCol, 1, 0);
@@ -212,6 +213,11 @@ namespace KlembordTool
 
         Control MakeColumn(string title, Control top, ClipList list, params Control[] buttons)
         {
+            return MakeColumnWithExtra(title, top, list, null, buttons);
+        }
+
+        Control MakeColumnWithExtra(string title, Control top, ClipList list, Control headerExtra, params Control[] buttons)
+        {
             var card = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = Theme.Card,
@@ -221,17 +227,39 @@ namespace KlembordTool
             card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             card.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            card.Controls.Add(new Label
+            var header = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            header.Controls.Add(new Label
             {
                 Text = title, AutoSize = true, Font = new Font("Segoe UI Semibold", 12F), ForeColor = Theme.Text,
-                Margin = new Padding(0, 0, 0, 6)
+                Margin = new Padding(ClipList.TextInset(Font) - 3, 0, 0, 2)
             }, 0, 0);
+            if (headerExtra != null) header.Controls.Add(headerExtra, 1, 0);
+            card.Controls.Add(header, 0, 0);
+            // Boxed controls (search field, buttons) share one left edge just outside the item text.
+            int boxInset = ClipList.TextInset(Font) - 5;
+            if (top is TextBox) top.Margin = new Padding(boxInset, 0, Font.Height / 2, 8);
             card.Controls.Add(top, 0, 1);
+            list.Margin = Padding.Empty;
             card.Controls.Add(list, 0, 2);
-            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(0, 6, 0, 0) };
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = new Padding(boxInset, 8, 0, 0) };
             flow.Controls.AddRange(buttons);
             card.Controls.Add(flow, 0, 3);
             return card;
+        }
+
+        // Single-line grey caption under a column title; ellipsis instead of widening the column.
+        Label MakeSubLabel(string text)
+        {
+            var label = new Label
+            {
+                Text = text, AutoSize = false, AutoEllipsis = true, Dock = DockStyle.Fill, ForeColor = Theme.Sub,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(ClipList.TextInset(Font) - 6, 0, 0, 8)
+            };
+            subLabels.Add(label);
+            return label;
         }
 
         static Button MakeButton(string text, EventHandler click)
@@ -245,7 +273,7 @@ namespace KlembordTool
         {
             var cm = new ContextMenuStrip();
             cm.Items.Add("Plakken", null, delegate { PasteClip(Sel(histList)); });
-            cm.Items.Add("Alleen kopiëren", null, delegate { CopyOnly(Sel(histList)); });
+            cm.Items.Add("Kopiëren (niet plakken)", null, delegate { CopyOnly(Sel(histList)); });
             cm.Items.Add(new ToolStripSeparator());
             cm.Items.Add("Naar bewaarlijst", null, delegate { AddTo(favList, Sel(histList)); });
             cm.Items.Add("Naar reekslijst", null, delegate { AddTo(seqList, Sel(histList)); });
@@ -260,7 +288,7 @@ namespace KlembordTool
         {
             var cm = new ContextMenuStrip();
             cm.Items.Add("Plakken", null, delegate { PasteClip(Sel(favList)); });
-            cm.Items.Add("Alleen kopiëren", null, delegate { CopyOnly(Sel(favList)); });
+            cm.Items.Add("Kopiëren (niet plakken)", null, delegate { CopyOnly(Sel(favList)); });
             cm.Items.Add(new ToolStripSeparator());
             cm.Items.Add("Sneltoets instellen…", null, delegate { SetClipHotkey(Sel(favList)); });
             cm.Items.Add("Bewerken…", null, delegate { EditClip(favList, Sel(favList)); });
@@ -275,8 +303,8 @@ namespace KlembordTool
         ContextMenuStrip BuildSequenceMenu()
         {
             var cm = new ContextMenuStrip();
-            cm.Items.Add("Plakken en reeks vanaf hier starten", null, delegate { StartSequence(seqList.SelectedIndex, true); });
-            cm.Items.Add("Reeks vanaf hier klaarzetten (zelf Ctrl+V)", null, delegate { StartSequence(seqList.SelectedIndex, false); });
+            cm.Items.Add("Plakken en reeks hier starten", null, delegate { StartSequence(seqList.SelectedIndex, true); });
+            cm.Items.Add("Reeks hier klaarzetten (zelf Ctrl+V drukken)", null, delegate { StartSequence(seqList.SelectedIndex, false); });
             cm.Items.Add(new ToolStripSeparator());
             cm.Items.Add("Bewerken…", null, delegate { EditClip(seqList, Sel(seqList)); });
             cm.Items.Add("Verwijderen", null, delegate { RemoveClip(seqList, Sel(seqList)); });
@@ -392,16 +420,17 @@ namespace KlembordTool
         {
             if (seqActive)
             {
-                seqStatus.Text = "Actief: regel " + (seqIndex + 1) + " van " + data.Sequence.Count + " staat klaar voor Ctrl+V";
+                seqStatus.Text = "Actief · regel " + (seqIndex + 1) + " van " + data.Sequence.Count + " staat klaar voor Ctrl+V";
                 seqStatus.ForeColor = Theme.Accent;
-                seqStartBtn.Text = "■ Stop reeks";
+                seqStartBtn.Text = "■ Stop";
                 tray.Text = "Klembord Tool – reeks " + (seqIndex + 1) + "/" + data.Sequence.Count;
             }
             else
             {
-                seqStatus.Text = data.Sequence.Count == 0 ? "Plak regels één voor één met Ctrl+V." : data.Sequence.Count + " regels · klik een regel om te beginnen";
+                seqStatus.Text = data.Sequence.Count == 0 ? "Plakt regels één voor één met Ctrl+V"
+                    : data.Sequence.Count + (data.Sequence.Count == 1 ? " regel" : " regels") + " · klik op een regel om te starten";
                 seqStatus.ForeColor = Theme.Sub;
-                seqStartBtn.Text = "▶ Start reeks";
+                seqStartBtn.Text = "▶ Start";
                 tray.Text = "Klembord Tool";
             }
         }
@@ -425,7 +454,7 @@ namespace KlembordTool
         string FavoriteMeta(Clip c)
         {
             string hk = c.Key != 0 ? "⌨ " + Clip.HotkeyText(c.Mods, c.Key) : "geen sneltoets";
-            if (failedHotkeys.Contains(c)) hk += "  (al in gebruik door ander programma!)";
+            if (failedHotkeys.Contains(c)) hk += " · al in gebruik door een ander programma";
             return hk + LinesInfo(c.Text);
         }
 
@@ -467,6 +496,13 @@ namespace KlembordTool
                 winEventHook = Native.SetWinEventHook(Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND,
                     IntPtr.Zero, winEventProc, 0, 0, Native.WINEVENT_OUTOFCONTEXT);
             }
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            // After DPI scaling: captions get the search field's height so all three lists start on the same line.
+            foreach (var label in subLabels) label.Height = searchBox.Height;
         }
 
         protected override void OnHandleDestroyed(EventArgs e)
@@ -610,19 +646,21 @@ namespace KlembordTool
             string main = data.MainKey != 0 ? Clip.HotkeyText(data.MainMods, data.MainKey) : "(geen)";
             MessageBox.Show(this,
                 "GESCHIEDENIS\n" +
-                "Alles wat je knipt of kopieert (tekst) komt bovenaan de lijst. Klik op een regel en hij wordt " +
-                "direct geplakt in het programma waar je net was. Typ om te zoeken.\n\n" +
+                "Alles wat je knipt of kopieert (tekst) komt bovenaan de lijst. Klik op een regel en die wordt " +
+                "meteen geplakt in het programma waar je net was. Het venster blijft open, zodat je daarna nog iets kunt aanklikken. " +
+                "Typ om te zoeken.\n\n" +
                 "BEWAARLIJST\n" +
-                "Sleep regels hierheen voor dingen die je vaker nodig hebt. Met rechtermuisknop › Sneltoets " +
-                "koppel je een toetscombinatie (bijv. Ctrl+Alt+1). Die combinatie plakt het knipsel in elk programma.\n\n" +
+                "Sleep regels hierheen voor tekst die je vaker nodig hebt. Via de rechtermuisknop kies je 'Sneltoets instellen…' " +
+                "en koppel je een toetscombinatie (bijv. Ctrl+Alt+1). Met die combinatie plak je het knipsel in elk programma.\n\n" +
                 "REEKSLIJST\n" +
-                "Zet regels in de juiste volgorde (slepen of 'Regels toevoegen…'). Klik op een regel: die wordt geplakt " +
-                "en de volgende staat meteen klaar. Elke keer dat je Ctrl+V drukt, komt de volgende regel. " +
-                "Of druk op '▶ Start reeks' en plak zelf met Ctrl+V.\n\n" +
+                "Zet regels in de gewenste volgorde (slepen of 'Toevoegen…'). Klik op een regel: die wordt geplakt en de " +
+                "volgende staat meteen klaar. Elke keer dat je Ctrl+V drukt, komt de volgende regel. " +
+                "Je kunt ook op '▶ Start' klikken en zelf plakken met Ctrl+V.\n\n" +
                 "SNELTOETSEN\n" +
-                main + " = dit venster openen/verbergen (instelbaar via Bestand).\n" +
-                "Enter = plakken, Delete = verwijderen, F2 = bewerken, Esc = verbergen.\n\n" +
-                "Sluiten (X) verbergt het venster naar het systeemvak. Echt afsluiten: Bestand › Afsluiten.",
+                main + ": dit venster openen of verbergen (in te stellen via Bestand)\n" +
+                "Enter: plakken  ·  Delete: verwijderen  ·  F2: bewerken  ·  Esc: verbergen\n\n" +
+                "Met het kruisje verberg je het venster; het programma blijft in het systeemvak draaien. " +
+                "Echt afsluiten doe je via Bestand › Afsluiten.",
                 "Klembord Tool – uitleg", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -672,7 +710,7 @@ namespace KlembordTool
             if (string.IsNullOrEmpty(text)) return;
             ignoreText = ignore ? text : null;
             try { Clipboard.SetDataObject(new DataObject(DataFormats.UnicodeText, text), true, 10, 50); }
-            catch (Exception) { ShowStatus("Klembord is bezet door een ander programma, probeer opnieuw."); }
+            catch (Exception) { ShowStatus("Het klembord is bezet door een ander programma. Probeer het opnieuw."); }
         }
 
         void AddHistory(string text)
@@ -722,10 +760,17 @@ namespace KlembordTool
                 ShowStatus("Geen doelvenster gevonden. Klik eerst in het programma waarin je wilt plakken.");
                 return;
             }
-            if (data.HideAfterPaste) Hide();
+            bool stayVisible = Visible && !data.HideAfterPaste;
+            if (!stayVisible) Hide();
             if (Native.IsIconic(target)) Native.ShowWindow(target, 9);
             Native.SetForegroundWindow(target);
-            After(90, () => SendPaste(suppressSequence));
+            After(90, () =>
+            {
+                SendPaste(suppressSequence);
+                // Keep this window in view (without taking focus) so the next item can be clicked.
+                if (stayVisible)
+                    Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            });
         }
 
         void SendPaste(bool suppressSequence)
@@ -921,7 +966,7 @@ namespace KlembordTool
             string start = "";
             try { if (Clipboard.ContainsText()) start = Clipboard.GetText(); } catch (Exception) { }
             using (var dlg = new EditDialog("Regels toevoegen aan reeks",
-                "Elke niet-lege regel wordt een apart item in de reekslijst (ingevuld met de huidige klembord-inhoud):", start))
+                "Elke regel wordt een apart item in de reekslijst; lege regels worden overgeslagen. Vooraf ingevuld met wat er nu op het klembord staat.", start))
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 Clip current = CurrentSequenceClip();
@@ -933,7 +978,7 @@ namespace KlembordTool
                     added++;
                 }
                 AfterListChanged(seqList, current);
-                ShowStatus(added + " regels toegevoegd aan de reekslijst.");
+                ShowStatus(added + (added == 1 ? " regel" : " regels") + " toegevoegd aan de reekslijst.");
             }
         }
 
@@ -1000,7 +1045,7 @@ namespace KlembordTool
             InstallKeyboardHook();
             LoadSequenceItem();
             if (pasteNow) FocusTargetAndPaste(false);
-            else ShowStatus("Reeks staat klaar: druk Ctrl+V in je programma om regel " + (seqIndex + 1) + " te plakken.");
+            else ShowStatus("De reeks staat klaar: druk Ctrl+V in je programma om regel " + (seqIndex + 1) + " te plakken.");
         }
 
         void LoadSequenceItem()
